@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>git streak motivator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --green: #39d353;
+      --green-dim: #196127;
+      --green-glow: rgba(57, 211, 83, 0.15);
+      --yellow: #e3b341;
+      --red: #f85149;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim: #484f58;
+      --accent: #58a6ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+    }
+
+    .header { margin-bottom: 40px; animation: fadeDown 0.6s ease both; }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .repo-path { font-size: 13px; color: var(--text-muted); }
+    .repo-path span { color: var(--accent); }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    h1 em { font-style: normal; color: var(--green); }
+    .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+
+    .input-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      animation: fadeUp 0.6s 0.1s ease both;
+    }
+
+    .input-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .input-row { display: flex; gap: 10px; }
+
+    .gh-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .gh-input::placeholder { color: var(--text-dim); }
+    .gh-input:focus { border-color: var(--accent); }
+
+    .fetch-btn {
+      background: var(--green-dim);
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--green);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .fetch-btn:hover { background: rgba(57,211,83,0.2); }
+    .fetch-btn:active { transform: scale(0.97); }
+    .fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .loading {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 14px;
+    }
+
+    .loading.show { display: flex; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .error-msg {
+      display: none;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--red);
+      background: rgba(248,81,73,0.08);
+      border: 1px solid rgba(248,81,73,0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .error-msg.show { display: block; }
+
+    .profile-strip {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .profile-strip.show { display: flex; }
+
+    .avatar { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border); }
+    .profile-name { font-size: 14px; font-weight: 500; color: var(--text); }
+    .profile-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .gh-link {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .gh-link:hover { text-decoration: underline; }
+
+    .results { display: none; }
+    .results.show { display: block; }
+
+    .status-card {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 28px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .status-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+
+    .status-card.good { background: rgba(57,211,83,0.04); border-color: rgba(57,211,83,0.3); }
+    .status-card.good::before { background: var(--green); box-shadow: 0 0 20px var(--green); }
+    .status-card.warn { background: rgba(227,179,65,0.04); border-color: rgba(227,179,65,0.3); }
+    .status-card.warn::before { background: var(--yellow); }
+    .status-card.bad  { background: rgba(248,81,73,0.04);  border-color: rgba(248,81,73,0.3); }
+    .status-card.bad::before  { background: var(--red); }
+
+    .status-tag {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot-blink { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .good .dot-blink { background: var(--green); animation: blink 1.5s infinite; box-shadow: 0 0 6px var(--green); }
+    .warn .dot-blink { background: var(--yellow); }
+    .bad  .dot-blink { background: var(--red); }
+    .good .label-txt { color: var(--green); }
+    .warn .label-txt { color: var(--yellow); }
+    .bad  .label-txt { color: var(--red); }
+
+    .msg-main {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(18px, 3vw, 24px);
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 10px;
+    }
+
+    .msg-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+    .fix-cmd {
+      margin-top: 20px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .prompt { color: var(--text-dim); margin-right: 6px; }
+
+    .copy-btn {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover { border-color: var(--text-muted); color: var(--text); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+
+    .m-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+    .m-val { font-size: 26px; font-weight: 700; font-family: 'Syne', sans-serif; line-height: 1; }
+    .m-unit { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    .contrib-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .contrib-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .contrib-title { font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+
+    .contrib-legend {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .legend-dots { display: flex; gap: 3px; }
+    .legend-dot  { width: 12px; height: 12px; border-radius: 2px; }
+
+    .grid-wrap { display: flex; gap: 3px; flex-wrap: wrap; }
+
+    .g-cell {
+      width: 16px; height: 16px;
+      border-radius: 2px;
+      transition: transform 0.1s;
+      cursor: default;
+    }
+
+    .g-cell:hover { transform: scale(1.3); z-index: 2; position: relative; }
+    .g-cell.l0 { background: var(--surface2); border: 1px solid var(--border); }
+    .g-cell.l1 { background: #196127; }
+    .g-cell.l2 { background: #26a641; }
+    .g-cell.l3 { background: #39d353; }
+    .g-cell.today { outline: 2px solid var(--green); outline-offset: 1px; }
+
+    .repo-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .repo-title { font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px; }
+
+    .repo-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .repo-item:last-child { border-bottom: none; }
+    .repo-name { font-size: 13px; color: var(--accent); flex: 1; }
+    .repo-updated { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+
+    .repo-lang {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+    @keyframes fadeUp   { from { opacity: 0; transform: translateY(16px);  } to { opacity: 1; transform: none; } }
+    @keyframes blink    { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes spin     { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-top">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M15 9H9M15 9C15 10.6569 16.3431 12 18 12C19.6569 12 21 10.6569 21 9C21 7.34315 19.6569 6 18 6C16.3431 6 15 7.34315 15 9ZM9 9C9 10.6569 7.65685 12 6 12C4.34315 12 3 10.6569 3 9C3 7.34315 4.34315 6 6 6C7.65685 6 9 7.34315 9 9ZM9 9C9 12.3137 9 15 9 15M9 15C9 16.6569 10.3431 18 12 18C13.6569 18 15 16.6569 15 15M9 15C7.34315 15 6 16.3431 6 18C6 19.6569 7.34315 21 9 21" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span class="repo-path">~/<span id="path-user">your-username</span></span>
+    </div>
+    <h1>streak<br><em>motivator</em></h1>
+    <p class="subtitle">// reads your real github data. then judges you.</p>
+  </div>
+
+  <div class="input-section">
+    <div class="input-label">your github username</div>
+    <div class="input-row">
+      <input class="gh-input" id="username-input" type="text" placeholder="e.g. torvalds" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <button class="fetch-btn" id="fetch-btn" onclick="fetchData()">run it</button>
+    </div>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <span id="loading-msg">fetching your shame...</span>
+    </div>
+    <div class="error-msg" id="error-msg"></div>
+    <div class="profile-strip" id="profile-strip">
+      <img class="avatar" id="avatar" src="" alt="">
+      <div>
+        <div class="profile-name" id="profile-name"></div>
+        <div class="profile-meta" id="profile-meta"></div>
+      </div>
+      <a class="gh-link" id="gh-link" href="#" target="_blank">view on github →</a>
+    </div>
+  </div>
+
+  <div class="results" id="results">
+
+    <div class="status-card" id="status-card">
+      <div class="status-tag">
+        <span class="dot-blink"></span>
+        <span class="label-txt" id="status-label">—</span>
+      </div>
+      <div class="msg-main" id="msg-main"></div>
+      <div class="msg-sub"  id="msg-sub"></div>
+      <div class="fix-cmd">
+        <div><span class="prompt">$</span><span id="fix-text"></span></div>
+        <button class="copy-btn" id="copy-btn" onclick="copyCmd()">copy</button>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="m-label">streak</div>
+        <div class="m-val" id="m-streak">—</div>
+        <div class="m-unit">days</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">last push</div>
+        <div class="m-val" id="m-last">—</div>
+        <div class="m-unit" id="m-last-unit">days ago</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">public repos</div>
+        <div class="m-val" id="m-repos">—</div>
+        <div class="m-unit">total</div>
+      </div>
+    </div>
+
+    <div class="contrib-section">
+      <div class="contrib-header">
+        <div class="contrib-title">last 28 days — push activity</div>
+        <div class="contrib-legend">
+          <span>less</span>
+          <div class="legend-dots">
+            <div class="legend-dot" style="background:var(--surface2);border:1px solid var(--border)"></div>
+            <div class="legend-dot" style="background:#196127"></div>
+            <div class="legend-dot" style="background:#26a641"></div>
+            <div class="legend-dot" style="background:#39d353"></div>
+          </div>
+          <span>more</span>
+        </div>
+      </div>
+      <div class="grid-wrap" id="grid"></div>
+    </div>
+
+    <div class="repo-section">
+      <div class="repo-title">recently active repos</div>
+      <div id="repo-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const roasts = [
+    ["{d} days. bro. BRO. what are you even doing.", "your commit history is legally a cold case."],
+    ["{d} days of silence.", "the repo has accepted its fate. have you?"],
+    ["it's been {d} whole days.", "git blame has one entry: cowardice."],
+    ["{d} days gone.", "archaeologists are carbon-dating your last push."],
+    ["the streak died {d} days ago.", "it had a family. a README. a future."],
+    ["{d} days without a push.", "your green squares filed a missing persons report."],
+  ];
+  const warnings = [
+    ["the streak is breathing, barely.", "you have hours. don't waste them."],
+    ["{d} day(s) gap. recoverable.", "the algorithm is watching. do not disappoint it."],
+    ["still alive. barely.", "commit something. a typo fix. anything."],
+  ];
+  const praise = [
+    ["pushed today.", "based. the green square gods are pleased. don't stop."],
+    ["look at you actually shipping.", "the streak lives. protect it with your life."],
+    ["committed today. streak intact.", "society is safe. do it again tomorrow."],
+  ];
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function fmt(s, d) { return s.replace(/{d}/g, d); }
+
+  function setLoading(msg) {
+    document.getElementById('loading').classList.add('show');
+    document.getElementById('loading-msg').textContent = msg;
+    document.getElementById('fetch-btn').disabled = true;
+    document.getElementById('error-msg').classList.remove('show');
+  }
+
+  function clearLoading() {
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('fetch-btn').disabled = false;
+  }
+
+  function showError(msg) {
+    clearLoading();
+    document.getElementById('error-msg').textContent = msg;
+    document.getElementById('error-msg').classList.add('show');
+    document.getElementById('results').classList.remove('show');
+    document.getElementById('profile-strip').classList.remove('show');
+  }
+
+  function daysBetween(dateStr) {
+    return Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+  }
+
+  function niceAgo(d) {
+    if (d === 0) return { val: 'today', unit: '' };
+    if (d === 1) return { val: '1', unit: 'day ago' };
+    return { val: String(d), unit: 'days ago' };
+  }
+
+  async function fetchData() {
+    const username = document.getElementById('username-input').value.trim();
+    if (!username) { showError('enter a github username first.'); return; }
+
+    setLoading('fetching your shame...');
+
+    try {
+      const userRes = await fetch(`https://api.github.com/users/${username}`);
+      if (!userRes.ok) {
+        if (userRes.status === 404) throw new Error(`user "${username}" not found on github.`);
+        if (userRes.status === 403) throw new Error('github rate limit hit. wait a minute and try again.');
+        throw new Error(`github error: ${userRes.status}`);
+      }
+      const user = await userRes.json();
+
+      document.getElementById('path-user').textContent = username;
+      document.getElementById('avatar').src = user.avatar_url;
+      document.getElementById('profile-name').textContent = user.name || username;
+      document.getElementById('profile-meta').textContent = `${user.public_repos} repos · ${user.followers} followers`;
+      document.getElementById('gh-link').href = user.html_url;
+      document.getElementById('profile-strip').classList.add('show');
+
+      setLoading('reading your repos...');
+
+      const reposRes = await fetch(`https://api.github.com/users/${username}/repos?sort=pushed&per_page=20`);
+      if (!reposRes.ok) throw new Error('could not fetch repos.');
+      const repos = await reposRes.json();
+
+      if (!repos.length) throw new Error('no public repos found. nothing to judge.');
+
+      const lastPushDate = repos[0].pushed_at;
+      const daysSince = daysBetween(lastPushDate);
+
+      // build set of days that had a push (from pushed_at dates across all repos)
+      const pushDays = new Set(
+        repos.map(r => new Date(r.pushed_at).toISOString().split('T')[0])
+      );
+
+      // calculate streak: consecutive days with activity going back from today
+      const today = new Date();
+      let streak = 0;
+      for (let i = 0; i <= 30; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        if (pushDays.has(key)) { streak++; }
+        else if (i > 0) break;
+      }
+
+      clearLoading();
+
+      // status logic
+      let type, lines, cmd;
+      if (daysSince === 0) {
+        type = 'good'; lines = pick(praise);
+        cmd = 'git push origin main';
+      } else if (daysSince <= 2) {
+        type = 'warn'; lines = pick(warnings);
+        cmd = 'git add . && git commit -m "keeping the streak alive"';
+      } else {
+        type = 'bad'; lines = pick(roasts);
+        cmd = "git add . && git commit -m \"i'm back\"";
+      }
+
+      document.getElementById('status-card').className = 'status-card ' + type;
+      document.getElementById('status-label').textContent = type === 'good' ? 'alive' : type === 'warn' ? 'at risk' : 'dead';
+      document.getElementById('msg-main').textContent = fmt(lines[0], daysSince);
+      document.getElementById('msg-sub').textContent  = fmt(lines[1], daysSince);
+      document.getElementById('fix-text').textContent = cmd;
+      document.getElementById('copy-btn').className = 'copy-btn';
+      document.getElementById('copy-btn').textContent = 'copy';
+
+      document.getElementById('m-streak').textContent = streak;
+      const ago = niceAgo(daysSince);
+      document.getElementById('m-last').textContent = ago.val;
+      document.getElementById('m-last-unit').textContent = ago.unit;
+      document.getElementById('m-repos').textContent = user.public_repos;
+
+      // contribution grid — 28 days
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      for (let i = 27; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        const div = document.createElement('div');
+        const has = pushDays.has(key);
+        const lvl = has ? (i <= 1 ? 'l3' : i <= 5 ? 'l2' : 'l1') : 'l0';
+        div.className = 'g-cell ' + lvl + (i === 0 ? ' today' : '');
+        div.title = key;
+        grid.appendChild(div);
+      }
+
+      // repo list
+      const repoList = document.getElementById('repo-list');
+      repoList.innerHTML = '';
+      repos.slice(0, 5).forEach(r => {
+        const d2 = daysBetween(r.pushed_at);
+        const a = niceAgo(d2);
+        const item = document.createElement('div');
+        item.className = 'repo-item';
+        item.innerHTML = `
+          <span class="repo-name">${r.name}</span>
+          ${r.language ? `<span class="repo-lang">${r.language}</span>` : ''}
+          <span class="repo-updated">${a.val}${a.unit ? ' ' + a.unit : ''}</span>
+        `;
+        repoList.appendChild(item);
+      });
+
+      document.getElementById('results').classList.add('show');
+
+    } catch (err) {
+      showError(err.message || 'something went wrong. check the username and try again.');
+    }
+  }
+
+  document.getElementById('username-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') fetchData();
+  });
+
+  function copyCmd() {
+    navigator.clipboard.writeText(document.getElementById('fix-text').textContent).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'copied!';
+      btn.className = 'copy-btn copied';
+    });
+  }
+</script>
+</body>
+</html>
