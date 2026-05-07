@@ -507,17 +507,19 @@
     document.getElementById('profile-strip').classList.remove('show');
   }
 
-  function daysBetween(dateStr) {
-    return Math.floor((Date.now() - new Date(dateStr)) / 86400000);
-  }
-
-  // Use local timezone date (not UTC) so pushes made e.g. at 1 AM IST
-  // aren't filed under the previous UTC date and falsely break the streak.
   function localKey(d) {
     const dt = (d instanceof Date) ? d : new Date(d);
     return dt.getFullYear() + '-' +
       String(dt.getMonth() + 1).padStart(2, '0') + '-' +
       String(dt.getDate()).padStart(2, '0');
+  }
+
+  function getDaysAgo(dateStr) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const past = new Date(dateStr);
+    past.setHours(0, 0, 0, 0);
+    return Math.round((today - past) / 86400000);
   }
 
   function niceAgo(d) {
@@ -566,39 +568,44 @@
       if (!repos.length) throw new Error('no public repos found. nothing to judge.');
 
       const lastPushDate = repos[0].pushed_at;
-      const daysSince = daysBetween(lastPushDate);
+      const daysSince = getDaysAgo(lastPushDate);
 
-      // Use GitHub Events API for accurate per-day push tracking.
-      // pushed_at on repos only shows the LATEST push per repo — repeated daily
-      // pushes to the same repo would be invisible, breaking the streak count.
       setLoading('reading your push history...');
       const pushDays = new Set();
+      // Always include repo-level pushed_at dates as a baseline
+      repos.forEach(r => pushDays.add(localKey(r.pushed_at)));
+
       try {
         for (let evPage = 1; evPage <= 3; evPage++) {
           const evRes = await fetch(`https://api.github.com/users/${username}/events?per_page=100&page=${evPage}`);
           if (!evRes.ok) break;
           const events = await evRes.json();
           if (!events.length) break;
-          events
-            .filter(e => e.type === 'PushEvent')
-            .forEach(e => pushDays.add(localKey(e.created_at)));
-          if (events.length < 100) break; // last page
+          events.forEach(e => {
+            // Count Pushes and Repo/Branch creations (matches GitHub graph better)
+            if (e.type === 'PushEvent' || e.type === 'CreateEvent') {
+              pushDays.add(localKey(e.created_at));
+            }
+          });
+          if (events.length < 100) break;
         }
-      } catch (_) { /* fall back to repo dates if events fail */ }
-      // Fallback: if events API returned nothing, use repo pushed_at dates
-      if (pushDays.size === 0) {
-        repos.forEach(r => pushDays.add(localKey(r.pushed_at)));
-      }
+      } catch (_) {}
 
-      // calculate streak: consecutive days with activity going back from today
+      // Streak calculation: calendar-day based
       const today = new Date();
       let streak = 0;
-      for (let i = 0; i <= 30; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const key = localKey(d);
-        if (pushDays.has(key)) { streak++; }
-        else if (i > 0) break;
+      let checkDate = new Date(today);
+
+      // If no push today, check if the streak is still alive from yesterday
+      if (!pushDays.has(localKey(checkDate))) {
+        checkDate.setDate(checkDate.getDate() - 1);
+      }
+
+      // Count backwards
+      while (pushDays.has(localKey(checkDate))) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+        if (streak > 365) break; // sanity check
       }
 
       clearLoading();
@@ -649,7 +656,7 @@
       const repoList = document.getElementById('repo-list');
       repoList.innerHTML = '';
       repos.slice(0, 5).forEach(r => {
-        const d2 = daysBetween(r.pushed_at);
+        const d2 = getDaysAgo(r.pushed_at);
         const a = niceAgo(d2);
         const item = document.createElement('div');
         item.className = 'repo-item';
@@ -661,6 +668,7 @@
         repoList.appendChild(item);
       });
 
+      console.log('Push Days Detected:', Array.from(pushDays).sort());
       document.getElementById('results').classList.add('show');
 
     } catch (err) {
